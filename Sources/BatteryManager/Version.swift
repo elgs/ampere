@@ -3,10 +3,10 @@ import Foundation
 enum AppVersion {
     /// Version string injected by release.sh, or read from git tag at dev time.
     static let current: String = {
-        // Release builds: version.txt is written by release.sh before compilation
+        // Release builds: version.txt is in the app bundle's Resources
         let mainBinary = Bundle.main.executablePath ?? ProcessInfo.processInfo.arguments[0]
-        let dir = (mainBinary as NSString).deletingLastPathComponent
-        let versionFile = (dir as NSString).appendingPathComponent("version.txt")
+        let contentsDir = ((mainBinary as NSString).deletingLastPathComponent as NSString).deletingLastPathComponent
+        let versionFile = (contentsDir as NSString).appendingPathComponent("Resources/version.txt")
         if let version = try? String(contentsOfFile: versionFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
            !version.isEmpty {
             return version

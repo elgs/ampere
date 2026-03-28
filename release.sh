@@ -44,7 +44,7 @@ cp .build/release/BatteryManager "$APP_DIR/Contents/MacOS/BatteryManager"
 cp .build/release/SMCWriter "$APP_DIR/Contents/MacOS/SMCWriter"
 
 # Write version file
-echo "$VERSION" > "$APP_DIR/Contents/MacOS/version.txt"
+echo "$VERSION" > "$APP_DIR/Contents/Resources/version.txt"
 
 # Create Info.plist
 cat > "$APP_DIR/Contents/Info.plist" << PLIST
@@ -76,11 +76,11 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
 </plist>
 PLIST
 
-echo "==> Signing..."
-codesign --force --deep --timestamp \
+echo "==> Signing with hardened runtime..."
+codesign --force --timestamp --options runtime \
     --sign "$SIGN_IDENTITY" \
     "$APP_DIR/Contents/MacOS/SMCWriter"
-codesign --force --deep --timestamp \
+codesign --force --timestamp --options runtime \
     --sign "$SIGN_IDENTITY" \
     "$APP_DIR"
 
