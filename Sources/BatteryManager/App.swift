@@ -772,6 +772,7 @@ struct BatteryRangeSlider: View {
                     .frame(width: markerWidth, height: geo.size.height)
                     .contentShape(Rectangle())
                     .position(x: inset + lowerX, y: midY)
+                    .help("Lower bound: charging starts when battery drops below this level")
                     .gesture(
                         DragGesture()
                             .onChanged { drag in
@@ -810,6 +811,7 @@ struct BatteryRangeSlider: View {
                     .frame(width: markerWidth, height: geo.size.height)
                     .contentShape(Rectangle())
                     .position(x: inset + upperX, y: midY)
+                    .help("Upper bound: charging stops when battery reaches this level")
                     .gesture(
                         DragGesture()
                             .onChanged { drag in
