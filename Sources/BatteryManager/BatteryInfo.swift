@@ -140,8 +140,8 @@ final class BatteryMonitor: ObservableObject {
 
             // Always clear all SMC state BEFORE removing the helper (need sudo access).
             // Use unconditional writes since in-memory state may not reflect actual SMC state.
-            self.runSMCWriteViaSudo("nodischarge")
-            self.runSMCWriteViaSudo("allow")
+            _ = self.runSMCWriteViaSudo("nodischarge")
+            _ = self.runSMCWriteViaSudo("allow")
 
             let ok = self.runAsAdmin(cmd)
 
