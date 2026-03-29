@@ -13,7 +13,7 @@ struct BatteryManagerApp: App {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private let monitor = BatteryMonitor()
@@ -35,9 +35,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         // Create popover with the battery panel
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 400, height: 620)
+        popover.contentSize = NSSize(width: 340, height: 620)
         popover.behavior = .transient
-        popover.delegate = self
         popover.contentViewController = NSHostingController(
             rootView: ContentView(monitor: monitor)
         )
@@ -222,7 +221,7 @@ struct ContentView: View {
                 Divider().padding(.horizontal)
 
                 // Charge control button
-                chargeControlSection(state)
+                chargeControlSection()
             }
 
             Divider().padding(.horizontal)
@@ -464,7 +463,7 @@ struct ContentView: View {
     @State private var buttonHovered = false
     @State private var buttonPressed = false
 
-    private func chargeControlSection(_ state: BatteryState) -> some View {
+    private func chargeControlSection() -> some View {
         let baseColor: Color = monitor.chargingPaused ? .green : .orange
 
         return HStack(spacing: 8) {
@@ -534,7 +533,6 @@ struct ContentView: View {
     }
 
     private func statusColor(_ state: BatteryState) -> Color {
-        if monitor.chargingPaused && state.adapterConnected { return .blue }
         if state.isCharging { return .green }
         if state.adapterConnected { return .blue }
         if state.percentage <= 15 { return .red }
