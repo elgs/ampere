@@ -325,8 +325,6 @@ final class BatteryMonitor: ObservableObject {
             timeRemaining = "\(ttf / 60)h \(ttf % 60)m to full"
         } else if !isCharging && !isPluggedIn, let tte = timeToEmpty, tte > 0 {
             timeRemaining = "\(tte / 60)h \(tte % 60)m remaining"
-        } else if isPluggedIn && !isCharging {
-            timeRemaining = "On AC Power"
         }
 
         let service = IOServiceGetMatchingService(kIOMainPortDefault,

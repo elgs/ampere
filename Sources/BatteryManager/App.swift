@@ -314,29 +314,24 @@ struct ContentView: View {
                     .foregroundColor(.primary)
             }
 
-            // Charging status label
+            // Charging status label + time remaining
             HStack(spacing: 6) {
                 Circle()
                     .fill(statusColor(state))
                     .frame(width: 8, height: 8)
 
-                Text(statusText(state))
+                Text(state.timeRemaining.isEmpty
+                    ? statusText(state)
+                    : "\(statusText(state)) — \(state.timeRemaining)")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.secondary)
             }
-
-            Text(state.timeRemaining)
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .frame(height: 14)
-                .opacity(state.timeRemaining.isEmpty ? 0 : 1)
 
             // Status message (fixed height to prevent layout jumps)
             Text(statusMessage(state))
                 .font(.system(size: 12))
                 .foregroundColor(statusMessageColor(state))
                 .frame(height: 14)
-                .opacity(statusMessage(state).isEmpty ? 0 : 1)
         }
     }
 
