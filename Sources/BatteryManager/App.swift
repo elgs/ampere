@@ -62,7 +62,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             }
             return event
         }
-
     }
 
     private func updateMenuBarIcon() {
@@ -466,10 +465,7 @@ struct ContentView: View {
     @State private var buttonPressed = false
 
     private func chargeControlSection(_ state: BatteryState) -> some View {
-        let enabled = buttonEnabled(state)
-        let baseColor: Color = enabled
-            ? (monitor.chargingPaused ? .green : .orange)
-            : Color.gray.opacity(0.3)
+        let baseColor: Color = monitor.chargingPaused ? .green : .orange
 
         return HStack(spacing: 8) {
             Image(systemName: monitor.chargingPaused ? "play.fill" : "pause.fill")
@@ -479,24 +475,19 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 36)
-        .foregroundColor(enabled ? .white : .secondary)
+        .foregroundColor(.white)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(baseColor)
-                .brightness(buttonPressed ? -0.15 : buttonHovered && enabled ? 0.1 : 0)
-                .shadow(color: buttonHovered && enabled ? baseColor.opacity(0.4) : .clear,
+                .brightness(buttonPressed ? -0.15 : buttonHovered ? 0.1 : 0)
+                .shadow(color: buttonHovered ? baseColor.opacity(0.4) : .clear,
                         radius: 6, x: 0, y: 2)
         )
-        .cornerRadius(8)
         .contentShape(Rectangle())
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard enabled else { return }
-                    buttonPressed = true
-                }
+                .onChanged { _ in buttonPressed = true }
                 .onEnded { _ in
-                    guard enabled else { return }
                     buttonPressed = false
                     monitor.toggleCharging()
                 }
@@ -540,11 +531,6 @@ struct ContentView: View {
             // Revert toggle on failure
             launchAtLogin = SMAppService.mainApp.status == .enabled
         }
-    }
-
-    /// Button is enabled if adapter is connected OR if charging is paused
-    private func buttonEnabled(_ state: BatteryState) -> Bool {
-        return state.adapterConnected || monitor.chargingPaused
     }
 
     private func statusColor(_ state: BatteryState) -> Color {
