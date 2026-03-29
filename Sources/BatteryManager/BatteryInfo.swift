@@ -281,19 +281,18 @@ final class BatteryMonitor: ObservableObject {
 
         if chargingPaused, let b = battery {
             if b.adapterConnected {
-                if !b.isPluggedIn {
-                    battery = BatteryState(
-                        percentage: b.percentage, cycleCount: b.cycleCount,
-                        isCharging: false, isPluggedIn: true,
-                        adapterConnected: true,
-                        health: b.health, temperature: b.temperature,
-                        timeRemaining: "On AC Power",
-                        designCapacity: b.designCapacity, maxCapacity: b.maxCapacity,
-                        currentCapacity: b.currentCapacity, amperage: b.amperage,
-                        voltage: b.voltage,
-                        batteryAgeYears: b.batteryAgeYears, batteryAgeDays: b.batteryAgeDays
-                    )
-                }
+                // Clear stale time-to-full and ensure state reflects paused charging
+                battery = BatteryState(
+                    percentage: b.percentage, cycleCount: b.cycleCount,
+                    isCharging: false, isPluggedIn: true,
+                    adapterConnected: true,
+                    health: b.health, temperature: b.temperature,
+                    timeRemaining: "",
+                    designCapacity: b.designCapacity, maxCapacity: b.maxCapacity,
+                    currentCapacity: b.currentCapacity, amperage: b.amperage,
+                    voltage: b.voltage,
+                    batteryAgeYears: b.batteryAgeYears, batteryAgeDays: b.batteryAgeDays
+                )
             } else {
                 // Adapter disconnected — clear inhibit so charging works when plugged back in
                 chargingPaused = false
