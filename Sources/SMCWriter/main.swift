@@ -110,6 +110,36 @@ func smcWriteKey(_ conn: io_connect_t, _ key: String, _ bytes: [UInt8]) -> Bool 
     return result == kIOReturnSuccess
 }
 
+private let smcCmdReadKey: UInt8 = 5
+
+func smcReadKey(_ conn: io_connect_t, _ key: String) -> [UInt8]? {
+    let smcKey = fourCharCode(key)
+    let inputSize = MemoryLayout<SMCKeyData>.size
+    var outputSize = MemoryLayout<SMCKeyData>.size
+
+    // Get key info
+    var input = SMCKeyData()
+    var output = SMCKeyData()
+    input.key = smcKey
+    input.data8 = smcCmdReadKeyInfo
+    guard IOConnectCallStructMethod(conn, 2, &input, inputSize, &output, &outputSize) == kIOReturnSuccess else { return nil }
+
+    let dataSize = output.keyInfo.dataSize
+    guard dataSize > 0, dataSize <= 32 else { return nil }
+
+    // Read value
+    input = SMCKeyData()
+    input.key = smcKey
+    input.keyInfo.dataSize = dataSize
+    input.data8 = smcCmdReadKey
+    output = SMCKeyData()
+    outputSize = MemoryLayout<SMCKeyData>.size
+    guard IOConnectCallStructMethod(conn, 2, &input, inputSize, &output, &outputSize) == kIOReturnSuccess else { return nil }
+
+    var raw = output.bytes
+    return withUnsafeBytes(of: &raw) { Array($0.prefix(Int(dataSize))) }
+}
+
 // MARK: - Sleep control
 
 /// Read a pmset value by key name (e.g. "sleep", "displaysleep").
@@ -324,15 +354,16 @@ case "nodischarge":
     killTask.waitUntilExit()
 
     // Clears CHIE and restores sleep if discharge was active.
+    let wasDischarging = smcReadKey(conn, "CHIE").map { $0.contains(where: { $0 != 0 }) } ?? false
     let chieValue: [UInt8] = [0x00]
-    let wasDischarging = FileManager.default.fileExists(atPath: savedSleepPath)
     if smcWriteKey(conn, "CHIE", chieValue) {
         if wasDischarging {
             // Wait for USB-C PD renegotiation to complete before re-enabling
             // clamshell sleep, otherwise the brief display disruption triggers sleep.
             sleep(3)
-            _ = setDischargeSleepPrevention(enabled: false)
         }
+        // Always clean up sleep files/settings in case they're stale
+        _ = setDischargeSleepPrevention(enabled: false)
         print("OK: active discharge disabled")
         exit(0)
     } else {
