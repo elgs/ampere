@@ -58,7 +58,7 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <key>CFBundleExecutable</key>
     <string>Ampere</string>
     <key>CFBundleIdentifier</key>
-    <string>com.elgs.ampere</string>
+    <string>com.az-code-lab.ampere</string>
     <key>CFBundleName</key>
     <string>Ampere</string>
     <key>CFBundleDisplayName</key>
@@ -144,9 +144,9 @@ git push
 rm -rf "$TAP_DIR"
 
 echo "==> Updating local tap..."
-cd "$(brew --repo elgs/taps)" && git pull -q
+cd "$(brew --repo az-code-lab/taps)" && git pull -q
 
 echo ""
 echo "==> Done! Released v$VERSION"
 echo "    GitHub: https://github.com/$GITHUB_REPO/releases/tag/v$VERSION"
-echo "    Install: brew tap elgs/taps && brew install --cask ${CASK_NAME}"
+echo "    Install: brew tap az-code-lab/taps && brew install --cask ${CASK_NAME}"

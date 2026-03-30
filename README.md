@@ -33,13 +33,13 @@ A lightweight macOS menu bar app for monitoring battery status and controlling c
 ### Homebrew (Recommended)
 
 ```bash
-brew tap elgs/taps
+brew tap az-code-lab/taps
 brew install --cask ampere
 ```
 
 ### Manual
 
-Download the latest `.dmg` from the [GitHub Releases](https://github.com/elgs/ampere/releases) page, open it, and drag **Ampere.app** to your Applications folder.
+Download the latest `.dmg` from the [GitHub Releases](https://github.com/az-code-lab/ampere/releases) page, open it, and drag **Ampere.app** to your Applications folder.
 
 ## Usage
 

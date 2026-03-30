@@ -131,7 +131,7 @@ final class BatteryMonitor: ObservableObject {
 
     // MARK: - Update Check
 
-    private static let caskURL = URL(string: "https://raw.githubusercontent.com/elgs/homebrew-taps/main/Casks/ampere.rb")!
+    private static let caskURL = URL(string: "https://raw.githubusercontent.com/az-code-lab/homebrew-taps/main/Casks/ampere.rb")!
 
     private func scheduleNextUpdateCheck() {
         updateCheckTimer = Timer.scheduledTimer(
