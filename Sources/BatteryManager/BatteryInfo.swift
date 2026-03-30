@@ -594,10 +594,10 @@ final class BatteryMonitor: ObservableObject {
 
         lastHealthCheckTime = Date()
         if healthy {
-            lastHealthCheckResult = "pass (CHTE=\(chte) CHIE=\(chie))"
+            lastHealthCheckResult = "pass\nCHTE=\(chte) CHIE=\(chie)"
             healthWarning = nil
         } else {
-            lastHealthCheckResult = "FAIL (CHTE=\(chte) CHIE=\(chie))"
+            lastHealthCheckResult = "FAIL\nCHTE=\(chte) CHIE=\(chie)"
             NSLog("BatteryManager: Health check failed — CHTE=%d CHIE=%d charge=%d%% paused=%d auto=%d discharge=%d bounds=[%d,%d]",
                   chte, chie, battery.percentage, chargingPaused, autoManageEnabled, autoDischargeEnabled,
                   chargeLowerBound, chargeUpperBound)

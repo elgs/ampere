@@ -207,7 +207,7 @@ struct ContentView: View {
     private var healthCheckTimeString: String {
         guard let time = monitor.lastHealthCheckTime else { return "n/a" }
         let fmt = DateFormatter()
-        fmt.dateFormat = "HH:mm:ss"
+        fmt.dateFormat = "h:m:s a M/d/yyyy"
         return fmt.string(from: time)
     }
 
@@ -315,10 +315,10 @@ struct ContentView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 4)
-            .alert("BatteryManager v\(AppVersion.current)", isPresented: $showAbout) {
+            .alert("BatteryManager \(AppVersion.current)", isPresented: $showAbout) {
                 Button("OK") {}
             } message: {
-                Text("Battery status monitor and charge controller for Apple Silicon Macs.\n\nSMC CHTE (charge inhibit): \(monitor.smcCHTE)\nSMC CHIE (force discharge): \(monitor.smcCHIE)\n\nHealth check: \(monitor.lastHealthCheckResult)\nChecked at: \(healthCheckTimeString)\n\nRequires admin privileges for charge control.")
+                Text("Battery status monitor and charge controller for Apple Silicon Macs.\n\nHealth check: \(monitor.lastHealthCheckResult)\nChecked at: \(healthCheckTimeString)\n\nRequires admin privileges for charge control.")
             }
         }
         .padding(.vertical, 20)
