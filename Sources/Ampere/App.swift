@@ -864,7 +864,11 @@ struct WindowDragBlocker: NSViewRepresentable {
 
     private class NoDragView: NSView {
         override var mouseDownCanMoveWindow: Bool { false }
-        override func hitTest(_ point: NSPoint) -> NSView? { self }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.isMovableByWindowBackground = false
+        }
     }
 }
 

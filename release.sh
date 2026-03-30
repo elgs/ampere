@@ -45,9 +45,13 @@ mkdir -p "$APP_DIR/Contents/Resources"
 cp "$REPO_DIR/.build/release/Ampere" "$APP_DIR/Contents/MacOS/Ampere"
 cp "$REPO_DIR/.build/release/SMCWriter" "$APP_DIR/Contents/MacOS/SMCWriter"
 
-# Write version file and copy icon
+# Write version file, copy icon, and compile asset catalog
 echo "$VERSION" > "$APP_DIR/Contents/Resources/version.txt"
 cp "$REPO_DIR/Ampere.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
+xcrun actool "$REPO_DIR/Assets.xcassets" \
+    --compile "$APP_DIR/Contents/Resources" \
+    --platform macosx --minimum-deployment-target 14.0 \
+    --app-icon AppIcon --output-partial-info-plist /dev/null 2>&1
 
 # Create Info.plist
 cat > "$APP_DIR/Contents/Info.plist" << PLIST
@@ -72,6 +76,8 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
     <string>AppIcon</string>
     <key>LSUIElement</key>
     <true/>
