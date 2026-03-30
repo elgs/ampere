@@ -208,41 +208,59 @@ When discharge is stopped, sleep is restored to the user's original setting via 
 
 ### Watchdog Daemon
 
-When discharge is activated, the SMCWriter spawns a **watchdog daemon** via `posix_spawn`. The daemon:
+A **watchdog daemon** is always running while the app is active. It is spawned via `posix_spawn` on launch, re-spawned after discharge stops, and also spawned by the discharge command. The daemon:
 
 1. Runs as a detached root process (independent of the app and sudo process chain).
 2. Polls the app's PID every 2 seconds.
-3. If the app dies (crash, `kill -9`, etc.), the watchdog cleans up within seconds:
+3. If the app dies (crash, `kill -9`, Ctrl+C, etc.), the watchdog cleans up within seconds:
+   - Clears `CHTE = 0x00` (allows charging)
    - Clears `CHIE = 0x00` (stops discharge)
    - Restores sleep settings via `pmset`
    - Exits cleanly (no orphaned processes, no leftover files)
 
 The watchdog must be spawned with `posix_spawn` (not `fork`) because the Swift/ObjC runtime is not fork-safe — forked children crash when using Foundation, IOKit, or Objective-C APIs. Similarly, signal handlers (`SIGTERM`/`SIGHUP`) cannot be used for cleanup because they can only call async-signal-safe C functions, not Swift/Foundation/IOKit APIs.
 
-On app launch, any orphaned watchdog processes from a previous crash are killed via `pkill`, and CHIE/sleep settings are cleared. If auto charge management is enabled and the battery is at or above the lower bound, CHTE is set to inhibit (micro-charge prevention); otherwise CHTE is cleared.
+On app launch, any orphaned watchdog processes from a previous crash are killed via `pkill`, and CHIE/sleep settings are cleared. If auto charge management is enabled and the battery is at or above the lower bound, CHTE is set to inhibit (micro-charge prevention); otherwise CHTE is cleared. A fresh watchdog is then spawned.
 
 ### Process Architecture
+
+The app cannot write to the SMC directly — it requires root privileges. Instead, it spawns short-lived root processes (`sudo SMCWriter`) for each SMC operation, plus a long-lived watchdog daemon as a safety net that cleans up if the app dies unexpectedly.
 
 ```
 Ampere (GUI, user)
   |
-  |-- sudo SMCWriter discharge:<app-pid>    (one-shot, root)
-  |     |-- pmset -a sleep 0 disablesleep 1
-  |     |-- SMC write CHIE = 0x08
-  |     |-- posix_spawn SMCWriter watchdog:<app-pid>
+  |-- sudo SMCWriter inhibit                 (one-shot, root)
+  |     |-- SMC write CHTE = 0x01            pause charging
   |     \-- exit(0)
   |
-  |-- SMCWriter watchdog:<app-pid>           (daemon, root, detached)
-  |     |-- sleep(2) loop
-  |     |-- if app PID gone: clear CHIE, restore pmset, exit
-  |     \-- (self-exits when app dies)
-  |
-  |-- sudo SMCWriter nodischarge             (one-shot, root, on stop)
-  |     |-- SMC write CHIE = 0x00
-  |     |-- pmset -a sleep <original> disablesleep 0
+  |-- sudo SMCWriter allow                   (one-shot, root)
+  |     |-- SMC write CHTE = 0x00            allow charging
   |     \-- exit(0)
   |
-  \-- pkill watchdog                         (cleanup)
+  |-- sudo SMCWriter discharge:<app-pid>     (one-shot, root)
+  |     |-- pmset -a sleep 0 disablesleep 1  disable sleep (clamshell fix)
+  |     |-- SMC write CHIE = 0x08            enable active discharge
+  |     |-- posix_spawn SMCWriter watchdog   spawn safety net daemon
+  |     \-- exit(0)
+  |
+  |-- sudo SMCWriter nodischarge             (one-shot, root)
+  |     |-- pkill watchdog                   kill existing watchdog
+  |     |-- SMC write CHIE = 0x00            disable active discharge
+  |     |-- pmset restore sleep settings     re-enable sleep
+  |     \-- exit(0)
+  |
+  |-- sudo SMCWriter spawn-watchdog:<pid>    (one-shot, root)
+  |     |-- posix_spawn SMCWriter watchdog   spawn safety net daemon
+  |     \-- exit(0)
+  |
+  \-- SMCWriter watchdog:<app-pid>           (daemon, root, detached)
+        |-- sleep(2) loop                    poll every 2 seconds
+        |-- if app PID gone:
+        |     |-- SMC write CHTE = 0x00      allow charging
+        |     |-- SMC write CHIE = 0x00      stop discharge
+        |     |-- pmset restore sleep        re-enable sleep
+        |     \-- exit(0)                    clean exit
+        \-- (runs until app dies)
 ```
 
 ## License

@@ -78,17 +78,16 @@ final class BatteryMonitor: ObservableObject {
             if shouldInhibit {
                 chargingPaused = true
             }
+            // Run cleanup synchronously before first refresh to prevent charging
+            // from starting during the async window
+            let okDischarge = runSMCWriteViaSudo("nodischarge")
+            let okChte = runSMCWriteViaSudo(shouldInhibit ? "inhibit" : "allow")
             let pid = ProcessInfo.processInfo.processIdentifier
-            smcQueue.async { [weak self] in
-                let okDischarge = self?.runSMCWriteViaSudo("nodischarge") ?? false
-                let okChte = self?.runSMCWriteViaSudo(shouldInhibit ? "inhibit" : "allow") ?? false
-                // Always spawn a watchdog so CHTE/CHIE are cleared if the app is killed
-                _ = self?.runSMCWriteViaSudo("spawn-watchdog:\(pid)")
-                if okDischarge && okChte {
-                    NSLog("Ampere: Launch cleanup done (inhibit=%d)", shouldInhibit)
-                } else {
-                    NSLog("Ampere: Launch cleanup failed (nodischarge=%d, chte=%d)", okDischarge, okChte)
-                }
+            _ = runSMCWriteViaSudo("spawn-watchdog:\(pid)")
+            if okDischarge && okChte {
+                NSLog("Ampere: Launch cleanup done (inhibit=%d)", shouldInhibit)
+            } else {
+                NSLog("Ampere: Launch cleanup failed (nodischarge=%d, chte=%d)", okDischarge, okChte)
             }
         }
 
@@ -502,6 +501,7 @@ final class BatteryMonitor: ObservableObject {
                         self.activeDischarging = false
                         NSLog("Ampere: Auto-discharge toggled off")
                     }
+                    self.refresh()
                 }
             }
             return
@@ -520,6 +520,7 @@ final class BatteryMonitor: ObservableObject {
                             self.activeDischarging = true
                             NSLog("Ampere: Auto-discharge started at %d%%, target %d%%", b.percentage, self.chargeUpperBound)
                         }
+                        self.refresh()
                     }
                 }
                 return
@@ -534,6 +535,7 @@ final class BatteryMonitor: ObservableObject {
                             self.activeDischarging = false
                             NSLog("Ampere: Auto-discharge reached target %d%%", self.chargeUpperBound)
                         }
+                        self.refresh()
                     }
                 }
                 return
@@ -556,6 +558,7 @@ final class BatteryMonitor: ObservableObject {
                             self.chargeToUpperBound = false
                             NSLog("Ampere: Inhibited charging at %d%%", b.percentage)
                         }
+                        self.refresh()
                     }
                 }
             } else if chargingPaused && (b.percentage < chargeLowerBound || chargeToUpperBound) {
@@ -570,6 +573,7 @@ final class BatteryMonitor: ObservableObject {
                             self.chargingPaused = false
                             NSLog("Ampere: Charging from %d%% to %d%%", b.percentage, self.chargeUpperBound)
                         }
+                        self.refresh()
                     }
                 }
             }
