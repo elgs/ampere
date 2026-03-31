@@ -345,10 +345,40 @@ struct ContentView: View {
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     Divider()
-                    Text("Health check: \(monitor.lastHealthCheckStatus)")
-                        .font(.system(size: 12))
-                    Text(monitor.lastHealthCheckSMC)
-                        .font(.system(size: 12, design: .monospaced))
+                    HStack(spacing: 4) {
+                        Text("Health check:")
+                            .font(.system(size: 12))
+                        Text(monitor.lastHealthCheckStatus)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(monitor.lastHealthCheckStatus == "pass" ? .green
+                                : monitor.lastHealthCheckStatus == "FAIL" ? .red : .primary)
+                    }
+                    if monitor.lastHealthCheckStatus == "FAIL" {
+                        let expectedLines = monitor.lastHealthCheckExpected.split(separator: "\n", omittingEmptySubsequences: false)
+                        let actualLines = monitor.lastHealthCheckSMC.split(separator: "\n", omittingEmptySubsequences: false)
+                        // Show matched keys in gray, only show expected vs actual for mismatched keys
+                        if monitor.lastHealthCheckCHTEMatch {
+                            Text(String(actualLines.first ?? ""))
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        } else {
+                            healthCheckMismatch(
+                                expectedValue: String(expectedLines.first ?? ""),
+                                actualValue: String(actualLines.first ?? ""))
+                        }
+                        if monitor.lastHealthCheckCHIEMatch {
+                            Text(String(actualLines.count > 1 ? actualLines[1] : ""))
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        } else {
+                            healthCheckMismatch(
+                                expectedValue: String(expectedLines.count > 1 ? expectedLines[1] : ""),
+                                actualValue: String(actualLines.count > 1 ? actualLines[1] : ""))
+                        }
+                    } else {
+                        Text(monitor.lastHealthCheckSMC)
+                            .font(.system(size: 12, design: .monospaced))
+                    }
                     Text("Checked at: \(healthCheckTimeString)")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
@@ -362,6 +392,7 @@ struct ContentView: View {
                             .keyboardShortcut(.defaultAction)
                     }
                 }
+                .textSelection(.enabled)
                 .padding(20)
                 .frame(width: 300)
             }
@@ -408,6 +439,7 @@ struct ContentView: View {
             Text(statusMessage(state))
                 .font(.system(size: 12))
                 .foregroundColor(statusMessageColor(state))
+                .textSelection(.enabled)
                 .frame(height: 14)
         }
     }
@@ -608,6 +640,24 @@ struct ContentView: View {
             }
         }
         .padding(.horizontal, 16)
+    }
+
+    /// Shows expected (green) vs actual (red) for a mismatched SMC key,
+    /// with the key= prefix aligned using monospaced font throughout.
+    private func healthCheckMismatch(expectedValue: String, actualValue: String) -> some View {
+        // e.g. expectedValue = "CHTE=0x01 00 00 00", actualValue = "CHTE=0x00 00 00 00"
+        // Extract the key name (everything before '=') to build aligned lines
+        let key = expectedValue.split(separator: "=", maxSplits: 1).first.map(String.init) ?? ""
+        let expVal = expectedValue.split(separator: "=", maxSplits: 1).dropFirst().first.map(String.init) ?? expectedValue
+        let actVal = actualValue.split(separator: "=", maxSplits: 1).dropFirst().first.map(String.init) ?? actualValue
+        return VStack(alignment: .leading, spacing: 2) {
+            Text("expected \(key)=\(expVal)")
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.green)
+            Text("actual   \(key)=\(actVal)")
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.red)
+        }
     }
 
     // MARK: - No Battery

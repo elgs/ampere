@@ -34,6 +34,9 @@ final class BatteryMonitor: ObservableObject {
     @Published var healthWarning: String?
     @Published var lastHealthCheckStatus: String = "pending"
     @Published var lastHealthCheckSMC: String = ""
+    @Published var lastHealthCheckExpected: String = ""
+    @Published var lastHealthCheckCHTEMatch: Bool = true
+    @Published var lastHealthCheckCHIEMatch: Bool = true
     @Published var lastHealthCheckTime: Date?
     @Published var updateAvailable: String?  // nil = no update, otherwise the new version string
 
@@ -485,6 +488,39 @@ final class BatteryMonitor: ObservableObject {
         }
     }
 
+    /// Returns expected CHTE and CHIE display strings for the current state.
+    static func expectedSMCValues(
+        autoManageEnabled: Bool, pauseButtonPaused: Bool,
+        chargeLevel: Int, lowerBound: Int, upperBound: Int,
+        dischargeEnabled: Bool
+    ) -> (chte: String, chie: String) {
+        if autoManageEnabled {
+            if dischargeEnabled {
+                if chargeLevel > upperBound {
+                    return ("0x01 00 00 00", "0x08")
+                } else if chargeLevel >= lowerBound {
+                    return ("0x00 or 0x01", "0x00")
+                } else {
+                    return ("0x00 00 00 00", "0x00")
+                }
+            } else {
+                if chargeLevel >= upperBound {
+                    return ("0x01 00 00 00", "0x00")
+                } else if chargeLevel >= lowerBound {
+                    return ("0x00 or 0x01", "0x00")
+                } else {
+                    return ("0x00 00 00 00", "0x00")
+                }
+            }
+        } else {
+            if pauseButtonPaused {
+                return ("0x01 00 00 00", "0x00")
+            } else {
+                return ("0x00 00 00 00", "0x00")
+            }
+        }
+    }
+
     // MARK: - Refresh
 
     func refresh() {
@@ -670,9 +706,23 @@ final class BatteryMonitor: ObservableObject {
         lastHealthCheckSMC = "CHTE=\(chteHex)\nCHIE=\(chieHex)"
         if healthy {
             lastHealthCheckStatus = "pass"
+            lastHealthCheckExpected = ""
+            lastHealthCheckCHTEMatch = true
+            lastHealthCheckCHIEMatch = true
             healthWarning = nil
         } else {
             lastHealthCheckStatus = "FAIL"
+            let expected = Self.expectedSMCValues(
+                autoManageEnabled: autoManageEnabled,
+                pauseButtonPaused: chargingPaused,
+                chargeLevel: battery.percentage,
+                lowerBound: chargeLowerBound,
+                upperBound: chargeUpperBound,
+                dischargeEnabled: autoDischargeEnabled
+            )
+            lastHealthCheckExpected = "CHTE=\(expected.chte)\nCHIE=\(expected.chie)"
+            lastHealthCheckCHTEMatch = chteHex == expected.chte || expected.chte == "0x00 or 0x01"
+            lastHealthCheckCHIEMatch = chieHex == expected.chie
             NSLog("Ampere: Health check failed — CHTE=%d CHIE=%d charge=%d%% paused=%d auto=%d discharge=%d bounds=[%d,%d]",
                   chte, chie, battery.percentage, chargingPaused, autoManageEnabled, autoDischargeEnabled,
                   chargeLowerBound, chargeUpperBound)
