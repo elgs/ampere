@@ -238,6 +238,7 @@ final class BatteryMonitor: ObservableObject {
                     self.chargeToUpperBound = false
                     self.chargingPaused = false
                     self.activeDischarging = false
+                    self.recheckHealth()
                 } else {
                     // User cancelled — restore previous state
                     self.smcQueue.async {
@@ -304,6 +305,9 @@ final class BatteryMonitor: ObservableObject {
             let ok = self?.installSudo() ?? false
             DispatchQueue.main.async {
                 NSApp.activate(ignoringOtherApps: true)
+                if ok {
+                    self?.recheckHealth()
+                }
                 completion(ok)
             }
         }
@@ -672,8 +676,14 @@ final class BatteryMonitor: ObservableObject {
             NSLog("Ampere: Health check failed — CHTE=%d CHIE=%d charge=%d%% paused=%d auto=%d discharge=%d bounds=[%d,%d]",
                   chte, chie, battery.percentage, chargingPaused, autoManageEnabled, autoDischargeEnabled,
                   chargeLowerBound, chargeUpperBound)
-            healthWarning = "SMC state mismatch — try Revoke Admin Access, then re-grant"
+            healthWarning = "SMC mismatch — revoke & re-grant admin"
         }
+    }
+
+    /// Re-run the health check immediately (e.g. after revoke/re-grant admin).
+    private func recheckHealth() {
+        guard let battery = Self.readBattery() else { return }
+        performHealthCheck(battery: battery)
     }
 
     static func readBattery() -> BatteryState? {

@@ -74,24 +74,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private var lastIconPct: Int = -1
     private var lastIconCharging: Bool = false
+    private var lastIconWarning: Bool = false
 
     private func updateMenuBarIcon() {
         guard let button = statusItem.button else { return }
         let pct = monitor.state?.percentage ?? 0
         let isCharging = monitor.state?.isCharging ?? false
+        let hasWarning = monitor.healthWarning != nil
 
         // Skip redraw if nothing visible changed
-        guard pct != lastIconPct || isCharging != lastIconCharging else { return }
+        guard pct != lastIconPct || isCharging != lastIconCharging || hasWarning != lastIconWarning else { return }
         lastIconPct = pct
         lastIconCharging = isCharging
+        lastIconWarning = hasWarning
 
         button.image = buildMenuBarIcon(
             percentage: CGFloat(pct),
-            isCharging: isCharging
+            isCharging: isCharging,
+            hasWarning: hasWarning
         )
-        button.attributedTitle = NSAttributedString(string: " \(pct)%", attributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
-        ])
+        let titleAttrs: [NSAttributedString.Key: Any] = hasWarning
+            ? [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular),
+               .foregroundColor: NSColor.systemOrange]
+            : [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)]
+        button.attributedTitle = NSAttributedString(string: " \(pct)%", attributes: titleAttrs)
     }
 
     @objc private func togglePopover() {
@@ -133,7 +139,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
 
-    private func buildMenuBarIcon(percentage: CGFloat, isCharging: Bool) -> NSImage {
+    private func buildMenuBarIcon(percentage: CGFloat, isCharging: Bool, hasWarning: Bool = false) -> NSImage {
         let battW: CGFloat = 24
         let battH: CGFloat = 11
         let capW: CGFloat = 2.8
@@ -143,7 +149,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let image = NSImage(size: NSSize(width: totalW, height: totalH))
         image.lockFocus()
 
-        let color = NSColor.black
+        let color: NSColor = hasWarning ? .systemOrange : .black
         let battY = (totalH - battH) / 2
 
         // Battery outline
@@ -197,7 +203,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
 
         image.unlockFocus()
-        image.isTemplate = true
+        image.isTemplate = !hasWarning
         return image
     }
 }
@@ -237,7 +243,7 @@ struct ContentView: View {
 
     private func batteryView(_ state: BatteryState) -> some View {
         VStack(spacing: 16) {
-            // Pin button top-right
+            // Pin button top-right (mirrors close button position)
             HStack {
                 Spacer()
                 Button(action: { monitor.pinned.toggle() }) {
@@ -249,7 +255,8 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 .help(monitor.pinned ? "Unpin panel" : "Pin panel open")
             }
-            .padding(.horizontal, 16)
+            .padding(.top, -8)
+            .padding(.trailing, 12)
             .padding(.bottom, -12)
 
             // Header with battery icon
