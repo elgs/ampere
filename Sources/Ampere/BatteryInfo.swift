@@ -680,6 +680,8 @@ final class BatteryMonitor: ObservableObject {
                     activeDischarging = false
                     smcQueue.async { [weak self] in
                         _ = self?.runSMCWriteViaSudo("nodischarge")
+                        let pid = ProcessInfo.processInfo.processIdentifier
+                        _ = self?.runSMCWriteViaSudo("spawn-watchdog:\(pid)")
                     }
                 }
             } else {
