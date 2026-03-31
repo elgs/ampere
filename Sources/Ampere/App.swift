@@ -627,7 +627,7 @@ struct ContentView: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
                 }
-            } else {
+            } else if state.percentage >= monitor.chargeLowerBound {
                 HStack {
                     Image(systemName: "arrow.up.to.line")
                         .font(.system(size: 14))

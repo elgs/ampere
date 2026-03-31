@@ -82,6 +82,13 @@ When the battery is at or below the upper bound and charging is inhibited, this 
 
 When auto charge management is off and a power adapter is connected, a manual **Pause Charging** / **Resume Charging** button is available.
 
+### Behavior on Sleep/Wake and Quit/Restart
+
+| Scenario | Sleep → Wake | Quit → Restart |
+|---|---|---|
+| **Charge to Upper Bound** is ON (charging in progress between bounds) | Charging continues. The SMC is already in "allow" state; the wake handler confirms this and takes no further action. Toggle stays ON until the upper bound is reached. | **Charging stops.** The "Charge to Upper Bound" toggle is not persisted — it resets to OFF on restart. The app sees the battery is between bounds and inhibits charging (micro-charge prevention). The user must re-enable the toggle manually. |
+| **Discharge to Upper Bound** is ON (discharging above upper bound) | Discharging continues. System sleep is prevented during discharge, so normal sleep should not occur. If forced (e.g. lid close), the wake handler re-asserts the discharge SMC state. Toggle stays ON. | **Discharging resumes automatically.** The "Discharge to Upper Bound" toggle is persisted. On restart, the app clears stale SMC state, then the first refresh cycle detects the battery is still above the upper bound and restarts discharge. Toggle stays ON. |
+
 ### Settings and Safety
 
 - **Settings persist across restarts** - auto charge management, discharge toggle, and charge bounds are saved and restored when the app relaunches.

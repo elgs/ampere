@@ -493,14 +493,20 @@ final class BatteryMonitor: ObservableObject {
     /// Returns true if SMC state is consistent with auto-manage settings.
     static func healthCheckAutoMode(
         chargeLevel: Int, lowerBound: Int, upperBound: Int,
-        dischargeEnabled: Bool, chie: Int, chte: Int
+        dischargeEnabled: Bool, activeDischarging: Bool,
+        chargeToUpperBound: Bool,
+        chie: Int, chte: Int
     ) -> Bool {
         if dischargeEnabled {
-            if chargeLevel > upperBound {
+            if activeDischarging && chargeLevel > upperBound {
                 return chte == SMC.chteInhibitInt && chie == SMC.chieDischargeInt
             } else if chargeLevel >= lowerBound {
-                // Between bounds (inclusive): chte can be 0 or 1, chie must be 0
-                return chie == SMC.chieNormalInt
+                // Between bounds: check chargeToUpperBound to determine expected CHTE
+                if chargeToUpperBound {
+                    return chte == SMC.chteAllowInt && chie == SMC.chieNormalInt
+                } else {
+                    return chte == SMC.chteInhibitInt && chie == SMC.chieNormalInt
+                }
             } else {
                 return chte == SMC.chteAllowInt && chie == SMC.chieNormalInt
             }
@@ -509,7 +515,11 @@ final class BatteryMonitor: ObservableObject {
             if chargeLevel >= upperBound {
                 return chte == SMC.chteInhibitInt
             } else if chargeLevel >= lowerBound {
-                return true // chte can be 0 or 1
+                if chargeToUpperBound {
+                    return chte == SMC.chteAllowInt
+                } else {
+                    return chte == SMC.chteInhibitInt
+                }
             } else {
                 return chte == SMC.chteAllowInt
             }
@@ -520,14 +530,19 @@ final class BatteryMonitor: ObservableObject {
     static func expectedSMCValues(
         autoManageEnabled: Bool, pauseButtonPaused: Bool,
         chargeLevel: Int, lowerBound: Int, upperBound: Int,
-        dischargeEnabled: Bool
+        dischargeEnabled: Bool, activeDischarging: Bool,
+        chargeToUpperBound: Bool
     ) -> (chte: String, chie: String) {
         if autoManageEnabled {
             if dischargeEnabled {
-                if chargeLevel > upperBound {
+                if activeDischarging && chargeLevel > upperBound {
                     return (SMC.chteInhibitHex, SMC.chieDischargeHex)
                 } else if chargeLevel >= lowerBound {
-                    return (SMC.chteEitherHex, SMC.chieNormalHex)
+                    if chargeToUpperBound {
+                        return (SMC.chteAllowHex, SMC.chieNormalHex)
+                    } else {
+                        return (SMC.chteInhibitHex, SMC.chieNormalHex)
+                    }
                 } else {
                     return (SMC.chteAllowHex, SMC.chieNormalHex)
                 }
@@ -535,7 +550,11 @@ final class BatteryMonitor: ObservableObject {
                 if chargeLevel >= upperBound {
                     return (SMC.chteInhibitHex, SMC.chieNormalHex)
                 } else if chargeLevel >= lowerBound {
-                    return (SMC.chteEitherHex, SMC.chieNormalHex)
+                    if chargeToUpperBound {
+                        return (SMC.chteAllowHex, SMC.chieNormalHex)
+                    } else {
+                        return (SMC.chteInhibitHex, SMC.chieNormalHex)
+                    }
                 } else {
                     return (SMC.chteAllowHex, SMC.chieNormalHex)
                 }
@@ -638,6 +657,23 @@ final class BatteryMonitor: ObservableObject {
                         self.refresh()
                     }
                 }
+            } else if !chargingPaused && !chargeToUpperBound
+                        && b.percentage >= chargeLowerBound && b.percentage < chargeUpperBound {
+                // Between bounds without an explicit charge-to-upper request — inhibit.
+                // This handles bounds being adjusted while charging is in progress.
+                autoManageInFlight = true
+                smcQueue.async { [weak self] in
+                    guard let self = self else { return }
+                    let ok = self.runSMCWrite("inhibit")
+                    DispatchQueue.main.async {
+                        self.autoManageInFlight = false
+                        if ok {
+                            self.chargingPaused = true
+                            NSLog("Ampere: Inhibited charging at %d%% (between bounds)", b.percentage)
+                        }
+                        self.refresh()
+                    }
+                }
             } else if chargingPaused && (b.percentage < chargeLowerBound || chargeToUpperBound) {
                 // Below lower bound or user explicitly requested charge to upper bound
                 autoManageInFlight = true
@@ -730,6 +766,8 @@ final class BatteryMonitor: ObservableObject {
                 lowerBound: chargeLowerBound,
                 upperBound: chargeUpperBound,
                 dischargeEnabled: autoDischargeEnabled,
+                activeDischarging: activeDischarging,
+                chargeToUpperBound: chargeToUpperBound,
                 chie: chie, chte: chte
             )
         } else {
@@ -757,7 +795,9 @@ final class BatteryMonitor: ObservableObject {
                 chargeLevel: battery.percentage,
                 lowerBound: chargeLowerBound,
                 upperBound: chargeUpperBound,
-                dischargeEnabled: autoDischargeEnabled
+                dischargeEnabled: autoDischargeEnabled,
+                activeDischarging: activeDischarging,
+                chargeToUpperBound: chargeToUpperBound
             )
             lastHealthCheckExpected = "\(SMC.keyChargeTerminate)=\(expected.chte)\n\(SMC.keyChargeInhibit)=\(expected.chie)"
             lastHealthCheckCHTEMatch = chteHex == expected.chte || expected.chte == SMC.chteEitherHex
