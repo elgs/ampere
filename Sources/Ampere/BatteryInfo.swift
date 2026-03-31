@@ -47,10 +47,18 @@ final class BatteryMonitor: ObservableObject {
         }
     }
     @Published var chargeLowerBound: Int {
-        didSet { UserDefaults.standard.set(chargeLowerBound, forKey: "chargeLowerBound") }
+        didSet {
+            if chargeLowerBound < 0 { chargeLowerBound = 0 }
+            else if chargeLowerBound >= chargeUpperBound { chargeLowerBound = chargeUpperBound - 5 }
+            UserDefaults.standard.set(chargeLowerBound, forKey: "chargeLowerBound")
+        }
     }
     @Published var chargeUpperBound: Int {
-        didSet { UserDefaults.standard.set(chargeUpperBound, forKey: "chargeUpperBound") }
+        didSet {
+            if chargeUpperBound > 100 { chargeUpperBound = 100 }
+            else if chargeUpperBound <= chargeLowerBound { chargeUpperBound = chargeLowerBound + 5 }
+            UserDefaults.standard.set(chargeUpperBound, forKey: "chargeUpperBound")
+        }
     }
 
     private var timer: Timer?
@@ -59,7 +67,6 @@ final class BatteryMonitor: ObservableObject {
     private var wakeObserver: NSObjectProtocol?
     private var autoManageInFlight = false
     private var refreshCount = 0
-    private var popoverVisible = false
     private let smcQueue = DispatchQueue(label: "com.ampere.smc", qos: .utility)
 
     private static let sudoersPath = AppConstants.sudoersPath
@@ -70,8 +77,13 @@ final class BatteryMonitor: ObservableObject {
         let defaults = UserDefaults.standard
         self.autoManageEnabled = defaults.bool(forKey: "autoManageEnabled")
         self.autoDischargeEnabled = defaults.bool(forKey: "autoDischargeEnabled")
-        self.chargeLowerBound = defaults.object(forKey: "chargeLowerBound") as? Int ?? 40
-        self.chargeUpperBound = defaults.object(forKey: "chargeUpperBound") as? Int ?? 60
+        var lower = defaults.object(forKey: "chargeLowerBound") as? Int ?? 40
+        var upper = defaults.object(forKey: "chargeUpperBound") as? Int ?? 60
+        if lower < 0 { lower = 0 }
+        if upper > 100 { upper = 100 }
+        if lower >= upper { lower = 40; upper = 60 }
+        self.chargeLowerBound = lower
+        self.chargeUpperBound = upper
 
         // Always clear discharge (CHIE) and kill orphaned watchdogs on launch.
         // For CHTE: if auto-manage is enabled and charge is at or above the lower
@@ -171,7 +183,6 @@ final class BatteryMonitor: ObservableObject {
 
     /// Switch to fast (10s) or slow (60s) polling based on popover visibility.
     func setFastPolling(_ fast: Bool) {
-        popoverVisible = fast
         isPopoverVisible = fast
         timer?.invalidate()
         let interval: TimeInterval = fast ? 10.0 : 60.0
@@ -575,7 +586,7 @@ final class BatteryMonitor: ObservableObject {
         var battery = Self.readBattery()
 
         // Only publish to SwiftUI when popover is visible to avoid expensive layout passes
-        if popoverVisible {
+        if isPopoverVisible {
             state = battery
         } else if state == nil {
             // First refresh on launch — always publish so menu bar icon has data
@@ -732,7 +743,7 @@ final class BatteryMonitor: ObservableObject {
         }
 
         // Update state again if it was modified (e.g. cleared timeRemaining when paused)
-        if popoverVisible, state != battery {
+        if isPopoverVisible, state != battery {
             state = battery
         }
 
@@ -752,7 +763,7 @@ final class BatteryMonitor: ObservableObject {
     private func performHealthCheck(battery: BatteryState) {
         guard let chteBytes = Self.smcReadKey(SMC.keyChargeTerminate), chteBytes.count == 4,
               let chieBytes = Self.smcReadKey(SMC.keyChargeInhibit), chieBytes.count == 1 else {
-            healthWarning = nil
+            // Cannot read SMC — preserve any existing warning rather than clearing it
             return
         }
 
