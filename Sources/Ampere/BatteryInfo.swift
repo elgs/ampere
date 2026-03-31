@@ -121,12 +121,14 @@ final class BatteryMonitor: ObservableObject {
 
             let done = DispatchSemaphore(value: 0)
             self.smcQueue.async {
-                // Always restore system defaults on quit
+                // Always restore system defaults on quit.
+                // Use runSMCWriteViaSudo directly to avoid stopDischarge()
+                // spawning a redundant watchdog during shutdown.
                 if self.activeDischarging {
-                    self.runSMCWrite("nodischarge")
+                    _ = self.runSMCWriteViaSudo("nodischarge")
                 }
                 if self.chargingPaused {
-                    self.runSMCWrite("allow")
+                    _ = self.runSMCWriteViaSudo("allow")
                 }
 
                 done.signal()
@@ -646,8 +648,17 @@ final class BatteryMonitor: ObservableObject {
                         batteryAgeYears: b.batteryAgeYears, batteryAgeDays: b.batteryAgeDays
                     )
                 }
+            } else if autoManageEnabled {
+                // Auto-manage: keep CHTE/chargingPaused for micro-charge prevention
+                // on reconnect. Only stop active discharge (no adapter = no discharge).
+                if activeDischarging {
+                    activeDischarging = false
+                    smcQueue.async { [weak self] in
+                        _ = self?.runSMCWriteViaSudo("nodischarge")
+                    }
+                }
             } else {
-                // Adapter disconnected — clear inhibit/discharge so charging works when plugged back in
+                // Manual mode: clear inhibit/discharge so charging works when plugged back in
                 chargingPaused = false
                 activeDischarging = false
                 chargeToUpperBound = false

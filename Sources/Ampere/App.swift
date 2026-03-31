@@ -563,6 +563,7 @@ struct ContentView: View {
                         }
                     } else {
                         monitor.autoManageEnabled = false
+                        monitor.chargeToUpperBound = false
                         if monitor.chargingPaused {
                             monitor.toggleCharging()
                         }
