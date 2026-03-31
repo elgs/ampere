@@ -243,21 +243,26 @@ struct ContentView: View {
 
     private func batteryView(_ state: BatteryState) -> some View {
         VStack(spacing: 16) {
-            // Pin button top-right (mirrors close button position)
-            HStack {
-                Spacer()
-                Button(action: { monitor.pinned.toggle() }) {
-                    Image(systemName: monitor.pinned ? "pin.fill" : "pin")
-                        .font(.system(size: 12))
-                        .foregroundColor(monitor.pinned ? .accentColor : .secondary)
-                        .rotationEffect(.degrees(monitor.pinned ? 0 : 45))
+            // App name centered, pin button top-right
+            ZStack {
+                Text("Ampere \(AppVersion.current)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                HStack {
+                    Spacer()
+                    Button(action: { monitor.pinned.toggle() }) {
+                        Image(systemName: monitor.pinned ? "pin.fill" : "pin")
+                            .font(.system(size: 12))
+                            .foregroundColor(monitor.pinned ? .accentColor : .secondary)
+                            .rotationEffect(.degrees(monitor.pinned ? 0 : 45))
+                    }
+                    .buttonStyle(.plain)
+                    .help(monitor.pinned ? "Unpin panel" : "Pin panel open")
                 }
-                .buttonStyle(.plain)
-                .help(monitor.pinned ? "Unpin panel" : "Pin panel open")
             }
             .padding(.top, -8)
             .padding(.trailing, 12)
-            .padding(.bottom, -12)
 
             // Header with battery icon
             batteryHeader(state)
