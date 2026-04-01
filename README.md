@@ -18,7 +18,7 @@ A lightweight macOS menu bar app for monitoring battery status and controlling c
 - **Discharge to upper bound** - optionally drain the battery to the target level while on AC power
 - **Health check** - periodically verifies SMC state matches expected values
 - **Update notifications** - checks for new versions via Homebrew cask
-- **Menu bar icon** - battery shape with live charge level indicator
+- **Menu bar icon** - battery shape with live charge level and animated fill when charging or discharging
 - **Pinnable popover** - pin the panel to keep it open while you work
 - **Launch at login** - start automatically when you log in
 
@@ -47,9 +47,9 @@ Download the latest `.dmg` from the [GitHub Releases](https://github.com/az-code
 
 Pausing/resuming charging requires root access to write to the SMC. Ampere handles this as follows:
 
-1. **First use** - when you enable charge control, macOS prompts for your admin password.
+1. **On launch** - the app installs (or updates) its helper binary. If the helper is missing or outdated, macOS prompts for your admin password. If cancelled, the app exits.
 2. **Setup** - a compiled helper binary (`SMCWriter`) is installed at `/usr/local/bin/az-ampere-smc` (owned by root), along with a sudoers rule at `/etc/sudoers.d/az-ampere` that allows passwordless execution of the helper.
-3. **Subsequent use** - charge control works without password prompts.
+3. **Subsequent launches** - the helper is verified at startup. If unchanged, no password is needed. After a Homebrew upgrade, the new helper is installed automatically (one password prompt).
 
 ### Auto Charge Management
 
@@ -156,10 +156,10 @@ sudo rm -f /etc/sudoers.d/az-ampere
 
 **"Pause Charging" does nothing / no password prompt appears**
 
-The helper binary may be outdated (e.g., after rebuilding the project). Fix by revoking and re-granting access:
+The helper binary may be corrupted. Fix by revoking and re-granting access:
 
 1. Click **Revoke Admin Access**
-2. Click **Pause Charging** again - it will prompt for your password and install a fresh helper
+2. Relaunch the app - it will prompt for your password and install a fresh helper
 
 ---
 

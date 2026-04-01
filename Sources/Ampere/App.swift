@@ -88,7 +88,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         // Manage animation timer
         let needsAnimation = isCharging || isAnimatingDown
-        if isCharging != lastIconCharging || pct != lastIconPct || needsAnimation != (animationTimer != nil) {
+        if isCharging != lastIconCharging || pct != lastIconPct || hasWarning != lastIconWarning
+            || needsAnimation != (animationTimer != nil) {
             animationTimer?.invalidate()
             animationTimer = nil
             if needsAnimation {
@@ -103,9 +104,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                         self.animationPct -= 10
                         if self.animationPct < 0 { self.animationPct = curPct }
                     }
+                    let warn = self.monitor.healthWarning != nil
                     button.image = self.buildMenuBarIcon(
                         percentage: CGFloat(self.animationPct),
-                        hasWarning: hasWarning
+                        hasWarning: warn
                     )
                 }
             }
@@ -173,6 +175,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     deinit {
         (pinnedObserver as? AnyCancellable)?.cancel()
         (stateObserver as? AnyCancellable)?.cancel()
+        animationTimer?.invalidate()
         if let mouseMonitor = mouseMonitor {
             NSEvent.removeMonitor(mouseMonitor)
         }
@@ -214,7 +217,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                               width: fillW, height: battH - 1 - inset * 2)
         color.setFill()
         NSBezierPath(roundedRect: fillRect, xRadius: 1, yRadius: 1).fill()
-
 
         image.unlockFocus()
         image.isTemplate = !hasWarning
