@@ -76,7 +76,7 @@ When the battery is above the upper bound, this toggle appears. When enabled, th
 
 #### Charge to Upper Bound
 
-When the battery is at or below the upper bound and charging is inhibited, this toggle appears. When enabled, the app allows charging until the upper bound is reached, then automatically resets the toggle and re-inhibits charging. Toggling it off mid-charge stops charging immediately and re-inhibits.
+When the battery is between the lower and upper bounds and charging is inhibited, this toggle appears. When enabled, the app allows charging until the upper bound is reached, then automatically resets the toggle and re-inhibits charging. Toggling it off mid-charge stops charging immediately and re-inhibits.
 
 ### Manual Charge Control
 
