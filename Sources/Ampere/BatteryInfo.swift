@@ -337,6 +337,7 @@ final class BatteryMonitor: ObservableObject {
         let cmd = [
             "mkdir -p /usr/local/bin",
             "cp '\(smcWriter)' \(Self.helperPath)",
+            "xattr -cr \(Self.helperPath)",
             "chmod 0755 \(Self.helperPath)",
             "chown root:wheel \(Self.helperPath)",
             "printf '%s' '\(user) ALL=(root) NOPASSWD: \(Self.helperPath)\n' > \(Self.sudoersPath)",

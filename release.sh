@@ -108,8 +108,16 @@ xcrun notarytool submit "$SCHEME.zip" \
     --keychain-profile "$SCHEME" \
     --wait
 
-echo "==> Stapling ticket..."
+echo "==> Stapling app ticket..."
 xcrun stapler staple "$APP_DIR"
+
+echo "==> Notarizing SMCWriter standalone (for /usr/local/bin install)..."
+rm -f "$BUILD_DIR/SMCWriter.zip"
+ditto -c -k --keepParent "$APP_DIR/Contents/MacOS/SMCWriter" "$BUILD_DIR/SMCWriter.zip"
+xcrun notarytool submit "$BUILD_DIR/SMCWriter.zip" \
+    --keychain-profile "$SCHEME" \
+    --wait
+rm -f "$BUILD_DIR/SMCWriter.zip"
 
 echo "==> Creating DMG..."
 rm -rf "/tmp/${SCHEME}DMG" "$DMG_PATH"
