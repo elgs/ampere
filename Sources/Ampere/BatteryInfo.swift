@@ -161,6 +161,8 @@ final class BatteryMonitor: ObservableObject {
 
         // Re-assert SMC state on wake — firmware or PD renegotiation can reset
         // CHTE during sleep, allowing charging to bypass micro-charge prevention.
+        // Check charge level vs bounds to avoid a race with refresh() that can
+        // deadlock CHTE=inhibit when charging should be allowed.
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil, queue: .main
@@ -171,7 +173,22 @@ final class BatteryMonitor: ObservableObject {
                 if self.activeDischarging {
                     _ = self.startDischarge()
                 } else if self.chargingPaused {
-                    _ = self.runSMCWriteViaSudo("inhibit")
+                    // If auto-manage is on and charge fell below the lower
+                    // bound during sleep, allow charging instead of blindly
+                    // re-asserting inhibit (which would race with refresh()
+                    // and potentially deadlock CHTE=0x01 while chargingPaused
+                    // gets cleared).
+                    if self.autoManageEnabled,
+                       let pct = Self.readBattery()?.percentage,
+                       pct < self.chargeLowerBound {
+                        _ = self.runSMCWriteViaSudo("allow")
+                        DispatchQueue.main.async {
+                            self.chargingPaused = false
+                            NSLog("Ampere: Wake — charge %d%% < lower bound %d%%, allowing", pct, self.chargeLowerBound)
+                        }
+                    } else {
+                        _ = self.runSMCWriteViaSudo("inhibit")
+                    }
                 }
                 DispatchQueue.main.async {
                     self.refresh()
