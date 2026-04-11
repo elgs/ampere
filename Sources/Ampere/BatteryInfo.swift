@@ -67,6 +67,7 @@ final class BatteryMonitor: ObservableObject {
     private var wakeObserver: NSObjectProtocol?
     private var autoManageInFlight = false
     private var refreshCount = 0
+    private var lastAdapterConnected: Bool?
     private let smcQueue = DispatchQueue(label: "com.ampere.smc", qos: .utility)
 
     private static let sudoersPath = AppConstants.sudoersPath
@@ -107,10 +108,13 @@ final class BatteryMonitor: ObservableObject {
             }
         }
         if isSudoRuleInstalled {
-            let shouldInhibit = autoManageEnabled
-                && (Self.readBattery()?.percentage ?? 0) >= chargeLowerBound
+            let launchPercentage = Self.readBattery()?.percentage ?? 0
+            let shouldInhibit = autoManageEnabled && launchPercentage >= chargeLowerBound
             if shouldInhibit {
                 chargingPaused = true
+            } else if autoManageEnabled && launchPercentage < chargeLowerBound {
+                // Rule 1: below lower bound at launch — charge all the way to upper
+                chargeToUpperBound = true
             }
             // Run cleanup synchronously before first refresh to prevent charging
             // from starting during the async window
@@ -184,6 +188,7 @@ final class BatteryMonitor: ObservableObject {
                         _ = self.runSMCWriteViaSudo("allow")
                         DispatchQueue.main.async {
                             self.chargingPaused = false
+                            self.chargeToUpperBound = true
                             NSLog("Ampere: Wake — charge %d%% < lower bound %d%%, allowing", pct, self.chargeLowerBound)
                         }
                     } else {
@@ -515,6 +520,87 @@ final class BatteryMonitor: ObservableObject {
         return withUnsafeBytes(of: &raw) { Array($0.prefix(Int(dataSize))) }
     }
 
+    // MARK: - Auto-manage decision (pure, testable)
+
+    /// Pure state carried across refresh() cycles for the auto-manage state machine.
+    struct AutoManageState: Equatable {
+        var chargingPaused: Bool
+        var chargeToUpperBound: Bool
+        var lastAdapterConnected: Bool?
+    }
+
+    /// Inputs observed by a single refresh() cycle.
+    struct AutoManageInputs: Equatable {
+        let autoManageEnabled: Bool
+        let adapterConnected: Bool
+        let percentage: Int
+        let lowerBound: Int
+        let upperBound: Int
+    }
+
+    /// SMC command the refresh() cycle should issue.
+    enum AutoManageAction: Equatable {
+        case none
+        case inhibit
+        case allow
+    }
+
+    struct AutoManageDecision: Equatable {
+        let action: AutoManageAction
+        let newState: AutoManageState
+    }
+
+    /// Core auto-manage state machine. Pure function: given the prior state and
+    /// the currently observed inputs, return the SMC action to issue and the
+    /// state to store after the action completes. Encodes:
+    ///   Rule 1 — falling below lower bound on AC → allow + set chargeToUpperBound
+    ///   Rule 2 — AC disconnect above lower bound → clear chargeToUpperBound
+    ///   Rule 3 — between bounds without chargeToUpperBound → inhibit
+    static func evaluateAutoManageStep(
+        state: AutoManageState,
+        inputs: AutoManageInputs
+    ) -> AutoManageDecision {
+        var next = state
+
+        // Rule 2: fire only on the connected→disconnected transition, and only
+        // when above the lower bound. An explicit toggle made while already on
+        // battery must not be reverted.
+        if state.lastAdapterConnected == true, !inputs.adapterConnected,
+           state.chargeToUpperBound, inputs.percentage >= inputs.lowerBound {
+            next.chargeToUpperBound = false
+        }
+        next.lastAdapterConnected = inputs.adapterConnected
+
+        // Auto-manage SMC decisions only apply on AC with auto-manage enabled.
+        guard inputs.autoManageEnabled, inputs.adapterConnected else {
+            return AutoManageDecision(action: .none, newState: next)
+        }
+
+        if !next.chargingPaused && inputs.percentage >= inputs.upperBound {
+            // At or above upper bound → inhibit and reset charge-to-upper.
+            next.chargingPaused = true
+            next.chargeToUpperBound = false
+            return AutoManageDecision(action: .inhibit, newState: next)
+        } else if !next.chargingPaused && !next.chargeToUpperBound
+                    && inputs.percentage >= inputs.lowerBound
+                    && inputs.percentage < inputs.upperBound {
+            // Between bounds without charge-to-upper → inhibit (rule 3).
+            next.chargingPaused = true
+            return AutoManageDecision(action: .inhibit, newState: next)
+        } else if next.chargingPaused
+                    && (inputs.percentage < inputs.lowerBound || next.chargeToUpperBound) {
+            // Below lower bound (rule 1) or explicit charge-to-upper → allow.
+            let belowLower = inputs.percentage < inputs.lowerBound
+            next.chargingPaused = false
+            if belowLower {
+                next.chargeToUpperBound = true
+            }
+            return AutoManageDecision(action: .allow, newState: next)
+        }
+
+        return AutoManageDecision(action: .none, newState: next)
+    }
+
     // MARK: - Health Check
 
     /// Health check for manual mode.
@@ -677,53 +763,59 @@ final class BatteryMonitor: ObservableObject {
             }
         }
 
-        if autoManageEnabled, !autoManageInFlight, let b = battery, b.adapterConnected {
-            if lastError != nil { lastError = nil }
+        // Auto-manage state machine — delegated to the pure decision function
+        // so behavior can be exercised by unit tests. This block handles rules
+        // 1/2/3: below-lower → charge-to-upper, disconnect-above-lower → clear
+        // charge-to-upper, between-bounds → no auto-charge.
+        if let b = battery {
+            let priorState = AutoManageState(
+                chargingPaused: chargingPaused,
+                chargeToUpperBound: chargeToUpperBound,
+                lastAdapterConnected: lastAdapterConnected
+            )
+            let stepInputs = AutoManageInputs(
+                autoManageEnabled: autoManageEnabled,
+                adapterConnected: b.adapterConnected,
+                percentage: b.percentage,
+                lowerBound: chargeLowerBound,
+                upperBound: chargeUpperBound
+            )
+            let decision = BatteryMonitor.evaluateAutoManageStep(
+                state: priorState, inputs: stepInputs
+            )
 
-            if !chargingPaused && b.percentage >= chargeUpperBound {
-                // At or above upper bound — inhibit charging and reset charge-to-upper toggle
+            // Pure state updates always apply (adapter tracking, rule-2 clear).
+            lastAdapterConnected = decision.newState.lastAdapterConnected
+            if chargeToUpperBound != decision.newState.chargeToUpperBound, decision.action == .none {
+                chargeToUpperBound = decision.newState.chargeToUpperBound
+                NSLog("Ampere: Cleared chargeToUpperBound on AC disconnect at %d%%", b.percentage)
+            }
+
+            if autoManageEnabled, b.adapterConnected, lastError != nil { lastError = nil }
+
+            // SMC action dispatch.
+            if decision.action != .none, !autoManageInFlight {
                 autoManageInFlight = true
+                let pct = b.percentage
+                let upper = chargeUpperBound
+                let cmd: String = decision.action == .allow ? "allow" : "inhibit"
+                let next = decision.newState
                 smcQueue.async { [weak self] in
                     guard let self = self else { return }
-                    let ok = self.runSMCWrite("inhibit")
+                    let ok = self.runSMCWrite(cmd)
                     DispatchQueue.main.async {
                         self.autoManageInFlight = false
                         if ok {
-                            self.chargingPaused = true
-                            self.chargeToUpperBound = false
-                            NSLog("Ampere: Inhibited charging at %d%%", b.percentage)
-                        }
-                        self.refresh()
-                    }
-                }
-            } else if !chargingPaused && !chargeToUpperBound
-                        && b.percentage >= chargeLowerBound && b.percentage < chargeUpperBound {
-                // Between bounds without an explicit charge-to-upper request — inhibit.
-                // This handles bounds being adjusted while charging is in progress.
-                autoManageInFlight = true
-                smcQueue.async { [weak self] in
-                    guard let self = self else { return }
-                    let ok = self.runSMCWrite("inhibit")
-                    DispatchQueue.main.async {
-                        self.autoManageInFlight = false
-                        if ok {
-                            self.chargingPaused = true
-                            NSLog("Ampere: Inhibited charging at %d%% (between bounds)", b.percentage)
-                        }
-                        self.refresh()
-                    }
-                }
-            } else if chargingPaused && (b.percentage < chargeLowerBound || chargeToUpperBound) {
-                // Below lower bound or user explicitly requested charge to upper bound
-                autoManageInFlight = true
-                smcQueue.async { [weak self] in
-                    guard let self = self else { return }
-                    let ok = self.runSMCWrite("allow")
-                    DispatchQueue.main.async {
-                        self.autoManageInFlight = false
-                        if ok {
-                            self.chargingPaused = false
-                            NSLog("Ampere: Charging from %d%% to %d%%", b.percentage, self.chargeUpperBound)
+                            self.chargingPaused = next.chargingPaused
+                            self.chargeToUpperBound = next.chargeToUpperBound
+                            switch decision.action {
+                            case .inhibit:
+                                NSLog("Ampere: Inhibited charging at %d%%", pct)
+                            case .allow:
+                                NSLog("Ampere: Charging from %d%% to %d%%", pct, upper)
+                            case .none:
+                                break
+                            }
                         }
                         self.refresh()
                     }

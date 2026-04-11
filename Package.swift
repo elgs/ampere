@@ -22,5 +22,10 @@ let package = Package(
                 .linkedFramework("IOKit"),
             ]
         ),
+        .testTarget(
+            name: "AmpereTests",
+            dependencies: ["Ampere", "Shared"],
+            path: "Tests/AmpereTests"
+        ),
     ]
 )
